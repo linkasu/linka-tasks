@@ -224,6 +224,7 @@ yc ydb database add-access-binding --id "$YDB_ID" --role ydb.editor --service-ac
 ensure_folder_binding storage.editor "$RUNTIME_SA_ID"
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.payloadViewer --service-account-id "$RUNTIME_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.viewer --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
+yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.payloadViewer --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc container registry add-access-binding --id "$REGISTRY_ID" --role container-registry.images.pusher --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc container registry add-access-binding --id "$REGISTRY_ID" --role container-registry.images.puller --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc container registry add-access-binding --id "$REGISTRY_ID" --role container-registry.images.puller --service-account-id "$RUNTIME_SA_ID" --profile "$YC_PROFILE" >/dev/null

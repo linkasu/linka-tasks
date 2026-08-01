@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+trap 'printf "Revision deployment failed at line %s.\n" "$LINENO" >&2' ERR
+
 : "${YC_FOLDER_ID:?YC_FOLDER_ID is required}"
 : "${YC_CONTAINER_ID:?YC_CONTAINER_ID is required}"
 : "${YC_RUNTIME_SA_ID:?YC_RUNTIME_SA_ID is required}"
