@@ -31,7 +31,7 @@ export class YdbAdapter implements StorageAdapter {
       idempotent: true,
       fn: async (session) => {
         for (const statement of migrationStatements(this.base)) {
-          const result = await session.execute({ text: statement, idempotent: true })
+          const result = await session.execute({ text: statement })
           for await (const resultSet of result.resultSets) {
             for await (const _row of resultSet.rows) {
               // DDL has no rows, but consuming the stream releases the query session.
