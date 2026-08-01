@@ -222,6 +222,7 @@ save_state
 
 yc ydb database add-access-binding --id "$YDB_ID" --role ydb.editor --service-account-id "$RUNTIME_SA_ID" --profile "$YC_PROFILE" >/dev/null
 ensure_folder_binding storage.editor "$RUNTIME_SA_ID"
+ensure_folder_binding editor "$DEPLOY_SA_ID"
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.payloadViewer --service-account-id "$RUNTIME_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.viewer --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.payloadViewer --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
