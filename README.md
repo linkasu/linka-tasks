@@ -22,7 +22,7 @@ Timer triggers --> job bridge Function --> POST /api/jobs/*
 
 GitHub Actions --OIDC--> deploy service account --> YCR + container revisions
 
-Telegram --> circleatickers.ru legacy nginx --> tasks.nkolinka.ru/api/telegram/webhook
+Telegram --> bot.todos.nkolinka.ru legacy nginx --> tasks.nkolinka.ru/api/telegram/webhook
 ```
 
 Production resources находятся в новой папке `linka-tasks-prod` облака `aacidov-main`. Единственное исключение: существующая DNS-зона `nkolinka.ru.` остаётся в папке `nko-linka`.
@@ -51,7 +51,7 @@ repo:OWNER/REPOSITORY:environment:production
 - `jq`, `openssl`, `gh`, `ssh`, `scp` и `curl`.
 - Созданный GitHub repository с default branch `main`.
 - `gh auth status` успешно работает для этого repository.
-- Доступ по SSH к `USER@circleatickers.ru` и известен абсолютный путь Compose project.
+- Доступ по SSH к `USER@circlestickers.ru` и известен абсолютный путь Compose project.
 - BotFather token пока не вводится и нигде не сохраняется до этапа финализации.
 
 Скрипты используют только `yc --profile default`. Они идемпотентно находят ресурсы по имени и не удаляют существующие объекты. При конфликте DNS или потерянном секрете Object Storage key скрипт останавливается вместо перезаписи.
@@ -103,7 +103,7 @@ Certificate Manager может некоторое время оставатьс�
 
 Первый deploy выполняется до появления Lockbox version. В revision нет Telegram и Object Storage credentials; приложение и публичная оболочка могут стартовать, а Telegram-аутентификация остаётся недоступной. Это ожидаемый безопасный промежуточный режим. Workflow не подставляет пустые секреты и не блокирует deployment.
 
-Нельзя выполнять `docker build`, `docker compose build` или сборку image на `circleatickers.ru`. Изменения Dockerfile проверяются только PR checks и собираются production workflow.
+Нельзя выполнять `docker build`, `docker compose build` или сборку image на `circlestickers.ru`. Изменения Dockerfile проверяются только PR checks и собираются production workflow.
 
 ## Финализация
 
@@ -131,21 +131,21 @@ Apply-запуск:
 
 ### Legacy proxy и setWebhook
 
-Подготовьте локальный ignored-файл по примеру `infra/legacy-proxy/proxy.env.example`. Все пути должны быть абсолютными. Убедитесь, что `PROXY_REMOTE_CONFIG` находится в уже подключённом к nginx каталоге, а `PROXY_CONTAINER_CONFIG` виден внутри указанного Compose service.
+Подготовьте локальный ignored-файл по примеру `infra/legacy-proxy/proxy.env.example`. Все пути должны быть абсолютными. `PROXY_REMOTE_CONFIG` указывает на отдельный host-level nginx virtual host для `bot.todos.nkolinka.ru`. До запуска finalizer создайте A-record на legacy server, установите `certbot` и выпустите Let's Encrypt certificate через webroot `/var/www/linka-tasks-acme`. Nginx template сохраняет ACME path доступным для автоматического renewal. Finalizer откатывает config, если `nginx -t` или reload завершается ошибкой.
 
 После ручной проверки audit выполните команду, напечатанную скриптом:
 
 ```bash
 ./scripts/finalize-production.sh \
-  --legacy-host USER@circleatickers.ru \
+  --legacy-host USER@circlestickers.ru \
   --legacy-compose-dir /ABSOLUTE/COMPOSE/PATH \
   --apply-proxy \
   --proxy-env-file /ABSOLUTE/PATH/proxy.env.local \
   --confirm-environment production \
-  --confirm-host circleatickers.ru
+  --confirm-host bot.todos.nkolinka.ru
 ```
 
-Без всех трёх явных значений `--legacy-host`, `--confirm-host` и `--confirm-environment production` изменения не применяются. Apply загружает отдельный nginx location, проверяет видимость файла внутри container, выполняет `nginx -t`, reload и только после успешной проверки вызывает Telegram `setWebhook`. Bot token остаётся в Lockbox и во временном файле `0600`, удаляемом trap.
+Без всех трёх явных значений `--legacy-host`, `--confirm-host` и `--confirm-environment production` изменения не применяются. Apply атомарно обновляет отдельный host-level nginx virtual host, выполняет `nginx -t`, reload и только после успешной проверки вызывает Telegram `setWebhook`. При ошибке предыдущий config восстанавливается. Bot token остаётся в Lockbox и во временном файле `0600`, удаляемом trap.
 
 Revision использует поддерживаемый текущим `yc` флаг `--zone-instances-limit 1` как временную границу масштабирования для логики с process-local serialization. Это лимит на availability zone, а не строгий глобальный singleton; долговременное решение должно обеспечивать распределённую сериализацию через YDB. Глобального `--max-instances` в локальном `yc 1.16.0` нет.
 

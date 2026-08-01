@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+trap 'printf "Finalization failed at line %s.\n" "$LINENO" >&2' ERR
+
 readonly STATE_FILE=infra/.env.production.local
 readonly APP_ORIGIN=https://tasks.nkolinka.ru
 readonly TIMER_CRON='0 * * * ? *'
@@ -17,12 +19,12 @@ usage() {
 Usage: finalize-production.sh [options]
 
 Options:
-  --legacy-host USER@circleatickers.ru
+  --legacy-host USER@circlestickers.ru
   --legacy-compose-dir /absolute/compose/path
   --apply-proxy
   --proxy-env-file /absolute/path/to/proxy.env.local
   --confirm-environment production
-  --confirm-host circleatickers.ru
+  --confirm-host bot.todos.nkolinka.ru
   --rotate-secrets
 USAGE
 }
@@ -117,12 +119,12 @@ save_state() {
 }
 
 yc_json() {
-  yc "$@" --folder-id "$FOLDER_ID" --profile default --format json
+  yc "$@" --folder-id "$FOLDER_ID" --profile default --format json </dev/null
 }
 
 if [[ -z $legacy_host && -t 0 ]]; then
-  IFS= read -r -p "Legacy SSH target [${USER}@circleatickers.ru]: " legacy_host
-  legacy_host=${legacy_host:-${USER}@circleatickers.ru}
+  IFS= read -r -p "Legacy SSH target [${USER}@circlestickers.ru]: " legacy_host
+  legacy_host=${legacy_host:-${USER}@circlestickers.ru}
 fi
 if [[ -z $legacy_compose_dir && -t 0 ]]; then
   IFS= read -r -p 'Absolute legacy Compose directory: ' legacy_compose_dir
@@ -131,8 +133,8 @@ if [[ -z $legacy_host || -z $legacy_compose_dir ]]; then
   printf 'Set LEGACY_SSH_HOST and LEGACY_COMPOSE_DIR, then rerun to perform the required read-only audit.\n' >&2
   exit 1
 fi
-if [[ ! $legacy_host =~ ^[A-Za-z0-9._-]+@circleatickers\.ru$ ]]; then
-  printf 'Legacy SSH target must be an explicit USER@circleatickers.ru value.\n' >&2
+if [[ ! $legacy_host =~ ^[A-Za-z0-9._-]+@circlestickers\.ru$ ]]; then
+  printf 'Legacy SSH target must be an explicit USER@circlestickers.ru value.\n' >&2
   exit 1
 fi
 if [[ ! $legacy_compose_dir =~ ^/[A-Za-z0-9._/-]+$ ]]; then
@@ -141,8 +143,8 @@ if [[ ! $legacy_compose_dir =~ ^/[A-Za-z0-9._/-]+$ ]]; then
 fi
 
 if [[ $apply_proxy == true ]]; then
-  if [[ $confirmed_environment != production || $confirmed_host != circleatickers.ru ]]; then
-    printf 'Proxy apply requires --confirm-environment production --confirm-host circleatickers.ru.\n' >&2
+  if [[ $confirmed_environment != production || $confirmed_host != bot.todos.nkolinka.ru ]]; then
+    printf 'Proxy apply requires --confirm-environment production --confirm-host bot.todos.nkolinka.ru.\n' >&2
     exit 1
   fi
   if [[ $proxy_env_file != /* || ! -f $proxy_env_file ]]; then
@@ -153,42 +155,38 @@ if [[ $apply_proxy == true ]]; then
   source "$proxy_env_file"
   : "${LEGACY_PUBLIC_HOST:?Missing LEGACY_PUBLIC_HOST}"
   : "${LEGACY_WEBHOOK_PATH:?Missing LEGACY_WEBHOOK_PATH}"
-  : "${PROXY_COMPOSE_SERVICE:?Missing PROXY_COMPOSE_SERVICE}"
   : "${PROXY_REMOTE_CONFIG:?Missing PROXY_REMOTE_CONFIG}"
-  : "${PROXY_CONTAINER_CONFIG:?Missing PROXY_CONTAINER_CONFIG}"
   : "${GITHUB_REPOSITORY:?Run configure-github-oidc.sh before finalization}"
 
   if [[ $LEGACY_PUBLIC_HOST != "$confirmed_host" || ! $LEGACY_WEBHOOK_PATH =~ ^/[A-Za-z0-9_./-]+$ ]]; then
     printf 'Proxy public host/path does not match the explicit confirmation.\n' >&2
     exit 1
   fi
-  if [[ ! $PROXY_COMPOSE_SERVICE =~ ^[A-Za-z0-9_.-]+$ || ! $PROXY_REMOTE_CONFIG =~ ^/[A-Za-z0-9._/-]+$ || ! $PROXY_CONTAINER_CONFIG =~ ^/[A-Za-z0-9._/-]+$ ]]; then
-    printf 'Proxy service and config paths contain unsafe characters.\n' >&2
+  if [[ ! $PROXY_REMOTE_CONFIG =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+    printf 'Proxy config paths contain unsafe characters.\n' >&2
     exit 1
   fi
   if [[ ! -f infra/job-trigger/index.js ]]; then
     printf 'Missing timer bridge source: infra/job-trigger/index.js\n' >&2
     exit 1
   fi
-  gh auth status >/dev/null
-  gh api "repos/$GITHUB_REPOSITORY" >/dev/null
+  gh auth status </dev/null >/dev/null
+  gh api "repos/$GITHUB_REPOSITORY" </dev/null >/dev/null
 fi
 
 printf 'Read-only Docker Compose audit on %s:%s\n' "$legacy_host" "$legacy_compose_dir"
-ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -- "$legacy_host" \
+ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new -- "$legacy_host" \
   "cd '$legacy_compose_dir' && docker compose config --services && docker compose config --images && docker compose ps"
 
 if [[ $apply_proxy == true ]]; then
   remote_config_dir=${PROXY_REMOTE_CONFIG%/*}
-  container_config_dir=${PROXY_CONTAINER_CONFIG%/*}
   [[ -n $remote_config_dir ]] || remote_config_dir=/
-  [[ -n $container_config_dir ]] || container_config_dir=/
-  ssh -o BatchMode=yes -- "$legacy_host" \
-    "cd '$legacy_compose_dir' && test -d '$remote_config_dir' && test -w '$remote_config_dir' && docker compose exec -T '$PROXY_COMPOSE_SERVICE' test -d '$container_config_dir' && docker compose exec -T '$PROXY_COMPOSE_SERVICE' nginx -t"
+  ssh -n -o BatchMode=yes -- "$legacy_host" \
+    "cd '$legacy_compose_dir' && sudo -n test -d '$remote_config_dir' && sudo -n test -f '/etc/letsencrypt/live/$LEGACY_PUBLIC_HOST/fullchain.pem' && sudo -n test -f '/etc/letsencrypt/live/$LEGACY_PUBLIC_HOST/privkey.pem' && sudo -n nginx -t"
 else
   printf '\nAudit complete; no token was read and no Lockbox, revision, remote file, or Telegram setting was changed.\n'
   printf 'Review infra/legacy-proxy/proxy.env.example, then run with all explicit confirmations:\n'
-  printf './scripts/finalize-production.sh --legacy-host %q --legacy-compose-dir %q --apply-proxy --proxy-env-file /ABSOLUTE/PATH/proxy.env.local --confirm-environment production --confirm-host circleatickers.ru\n' "$legacy_host" "$legacy_compose_dir"
+  printf './scripts/finalize-production.sh --legacy-host %q --legacy-compose-dir %q --apply-proxy --proxy-env-file /ABSOLUTE/PATH/proxy.env.local --confirm-environment production --confirm-host bot.todos.nkolinka.ru\n' "$legacy_host" "$legacy_compose_dir"
   exit 0
 fi
 
@@ -236,7 +234,7 @@ if [[ $create_secret_version == true ]]; then
     IFS= read -r -s -p 'BotFather token: ' bot_token
     printf '\n' >&2
   else
-    IFS= read -r bot_token
+    IFS= read -r bot_token || [[ -n $bot_token ]]
   fi
   if [[ ! $bot_token =~ ^[0-9]+:[A-Za-z0-9_-]{20,}$ ]]; then
     printf 'The supplied BotFather token has an unexpected format.\n' >&2
@@ -381,15 +379,64 @@ ensure_timer_trigger linka-tasks-outbox /api/jobs/outbox OUTBOX_TRIGGER_ID
 ensure_timer_trigger linka-tasks-recurrences /api/jobs/recurrences RECURRENCES_TRIGGER_ID
 
 proxy_template=$(<infra/legacy-proxy/nginx-location.conf.tpl)
-proxy_config=${proxy_template//__WEBHOOK_PATH__/$LEGACY_WEBHOOK_PATH}
+proxy_config=${proxy_template//__PUBLIC_HOST__/$LEGACY_PUBLIC_HOST}
+proxy_config=${proxy_config//__WEBHOOK_PATH__/$LEGACY_WEBHOOK_PATH}
 proxy_config=${proxy_config//__PROXY_SECRET__/$proxy_secret}
 write_secret_file nginx.conf "$proxy_config"
 unset proxy_config proxy_secret
 
-remote_temporary=${PROXY_REMOTE_CONFIG}.linka-tasks-tmp
+remote_temporary=$(ssh -o BatchMode=yes -- "$legacy_host" mktemp /tmp/linka-tasks-nginx.XXXXXX)
+if [[ ! $remote_temporary =~ ^/tmp/linka-tasks-nginx\.[A-Za-z0-9]+$ ]]; then
+  printf 'Legacy host returned an unsafe temporary path.\n' >&2
+  exit 1
+fi
 scp -q -- "$secret_dir/nginx.conf" "$legacy_host:$remote_temporary"
-ssh -o BatchMode=yes -- "$legacy_host" \
-  "cd '$legacy_compose_dir' && install -m 600 '$remote_temporary' '$PROXY_REMOTE_CONFIG' && rm -f '$remote_temporary' && docker compose exec -T '$PROXY_COMPOSE_SERVICE' test -r '$PROXY_CONTAINER_CONFIG' && docker compose exec -T '$PROXY_COMPOSE_SERVICE' nginx -t && docker compose exec -T '$PROXY_COMPOSE_SERVICE' nginx -s reload"
+ssh -o BatchMode=yes -- "$legacy_host" bash -s -- \
+  "$remote_temporary" "$PROXY_REMOTE_CONFIG" <<'REMOTE_PROXY'
+set -euo pipefail
+source_file=$1
+config_file=$2
+config_backup=$(mktemp /tmp/linka-tasks-config.XXXXXX)
+had_config=false
+changed=false
+
+rollback() {
+  if [[ $had_config == true ]]; then
+    sudo install -m 600 "$config_backup" "$config_file"
+  else
+    sudo rm -f -- "$config_file"
+  fi
+  sudo nginx -t || true
+}
+
+cleanup() {
+  sudo rm -f -- "$source_file" "$config_backup"
+}
+
+on_error() {
+  status=$?
+  trap - ERR
+  if [[ $changed == true ]]; then
+    rollback
+    sudo systemctl reload nginx || true
+  fi
+  cleanup
+  exit "$status"
+}
+
+trap on_error ERR
+if sudo test -f "$config_file"; then
+  sudo cp -- "$config_file" "$config_backup"
+  had_config=true
+fi
+sudo install -m 600 "$source_file" "$config_file"
+changed=true
+sudo nginx -t
+sudo systemctl reload nginx
+changed=false
+cleanup
+trap - ERR
+REMOTE_PROXY
 
 webhook_url=https://$LEGACY_PUBLIC_HOST$LEGACY_WEBHOOK_PATH
 write_secret_file telegram-set-webhook.conf "url = \"https://api.telegram.org/bot${bot_token}/setWebhook\"
