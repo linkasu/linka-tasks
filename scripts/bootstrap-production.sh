@@ -55,7 +55,7 @@ ensure_dns_record() {
   local records existing
   records=$(yc_json dns zone list-records --id "$DNS_ZONE_ID" --folder-id "$DNS_FOLDER_ID")
   existing=$(jq -r --arg name "$name" --arg type "$type" \
-    '.[] | select(.name == $name and .type == $type) | .data[]' <<<"$records")
+    '.record_sets[] | select(.name == $name and .type == $type) | .data[]' <<<"$records")
   if [[ -n $existing ]]; then
     if grep -Fqx -- "$value" <<<"$existing"; then
       return
@@ -177,7 +177,7 @@ fi
 yc storage bucket update \
   --name "$BUCKET_NAME" \
   --acl private \
-  --cors 'allowed-origins=https://tasks.nkolinka.ru,allowed-methods=PUT,allowed-methods=GET,allowed-methods=HEAD,allowed-headers=*,expose-headers=ETag' \
+  --cors 'allowed-methods=[method-get,method-put,method-head],allowed-origins=[https://tasks.nkolinka.ru],allowed-headers=[*],expose-headers=[ETag]' \
   --folder-id "$FOLDER_ID" \
   --profile "$YC_PROFILE" >/dev/null
 
@@ -270,13 +270,19 @@ ensure_dns_record "$APP_DOMAIN." CNAME "$API_GATEWAY_DOMAIN."
 
 certificate_status=$(jq -r '.status' <<<"$certificate_json")
 if [[ $certificate_status != ISSUED ]]; then
-  challenge_value=$(jq -r '.challenges[] | select(.type == "DNS") | .dns_challenge.dns_txt_value // empty' <<<"$certificate_json" | head -n 1)
-  if [[ -z $challenge_value ]]; then
-    printf 'Certificate Manager did not return a DNS TXT challenge. Rerun this script.\n' >&2
+  challenge=$(jq -c '[.challenges[] | select(.type == "DNS") | .dns_challenge] | sort_by(.type != "CNAME") | first // empty' <<<"$certificate_json")
+  challenge_name=$(jq -r '.name // empty' <<<"$challenge")
+  challenge_type=$(jq -r '.type // empty' <<<"$challenge")
+  challenge_value=$(jq -r '.value // empty' <<<"$challenge")
+  if [[ -z $challenge_name || -z $challenge_type || -z $challenge_value ]]; then
+    printf 'Certificate Manager did not return a usable DNS challenge. Rerun this script.\n' >&2
     save_state
     exit 3
   fi
-  ensure_dns_record "_acme-challenge.$APP_DOMAIN." TXT "\"$challenge_value\""
+  if [[ $challenge_type == TXT ]]; then
+    challenge_value="\"$challenge_value\""
+  fi
+  ensure_dns_record "$challenge_name" "$challenge_type" "$challenge_value"
   for _ in {1..60}; do
     [[ $certificate_status == ISSUED ]] && break
     sleep 10

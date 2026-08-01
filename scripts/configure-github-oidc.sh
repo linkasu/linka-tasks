@@ -11,6 +11,7 @@ fi
 
 github_repository=$1
 github_owner=${github_repository%%/*}
+github_repo=${github_repository#*/}
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
@@ -37,7 +38,9 @@ TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
 : "${DEPLOY_SA_ID:?Missing DEPLOY_SA_ID in state}"
 
 audience=https://github.com/$github_owner
-subject=repo:$github_repository:environment:production
+github_owner_id=$(gh api "orgs/$github_owner" --jq '.id')
+github_repository_id=$(gh api "repos/$github_repository" --jq '.id')
+subject="repo:${github_owner}@${github_owner_id}/${github_repo}@${github_repository_id}:environment:production"
 
 federations=$(yc iam workload-identity oidc federation list --folder-id "$FOLDER_ID" --profile default --format json)
 FEDERATION_ID=$(jq -r --arg name "$FEDERATION_NAME" '.[] | select(.name == $name) | .id' <<<"$federations" | head -n 1)
