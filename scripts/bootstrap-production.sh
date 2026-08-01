@@ -225,6 +225,8 @@ ensure_folder_binding storage.editor "$RUNTIME_SA_ID"
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.payloadViewer --service-account-id "$RUNTIME_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc lockbox secret add-access-binding --id "$LOCKBOX_SECRET_ID" --role lockbox.viewer --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc container registry add-access-binding --id "$REGISTRY_ID" --role container-registry.images.pusher --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
+yc container registry add-access-binding --id "$REGISTRY_ID" --role container-registry.images.puller --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
+yc container registry add-access-binding --id "$REGISTRY_ID" --role container-registry.images.puller --service-account-id "$RUNTIME_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc serverless container add-access-binding --id "$CONTAINER_ID" --role serverless-containers.editor --service-account-id "$DEPLOY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc serverless container add-access-binding --id "$CONTAINER_ID" --role serverless-containers.containerInvoker --service-account-id "$GATEWAY_SA_ID" --profile "$YC_PROFILE" >/dev/null
 yc serverless function add-access-binding --id "$JOB_FUNCTION_ID" --role functions.functionInvoker --service-account-id "$GATEWAY_SA_ID" --profile "$YC_PROFILE" >/dev/null

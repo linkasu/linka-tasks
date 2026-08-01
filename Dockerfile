@@ -6,7 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npm run postinstall && npm run build
+RUN npm run postinstall && npm run build \
+    && rm -rf .output/server/node_modules \
+    && npm install --prefix .output/server --omit=dev --ignore-scripts
 
 FROM node:24-bookworm-slim AS runtime
 
