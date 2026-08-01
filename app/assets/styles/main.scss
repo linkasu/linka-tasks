@@ -1,0 +1,89 @@
+html {
+  overflow-y: auto;
+}
+
+body {
+  background: rgb(var(--v-theme-background));
+}
+
+.page-container {
+  width: min(1500px, 100%);
+  margin-inline: auto;
+  padding: 28px 32px 48px;
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-heading h1 {
+  font-size: clamp(1.6rem, 3vw, 2.25rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+
+.app-drawer {
+  background:
+    linear-gradient(180deg, rgba(var(--v-theme-primary), 0.07), transparent 14rem),
+    rgb(var(--v-theme-surface));
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  box-shadow: 0 8px 22px rgba(var(--v-theme-primary), 0.23);
+}
+
+.app-bar {
+  background: rgba(var(--v-theme-surface), 0.86) !important;
+  backdrop-filter: blur(16px);
+}
+
+.surface-card {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 18px !important;
+}
+
+.task-description :is(p, ul, ol, pre, blockquote) {
+  margin-block: 0 12px;
+}
+
+.task-description img {
+  max-width: 100%;
+}
+
+.task-description pre {
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+
+@media (max-width: 959px) {
+  .page-container {
+    padding: 20px 18px 96px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page-container {
+    padding: 16px 12px 96px;
+  }
+
+  .page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page-heading > .v-btn {
+    width: 100%;
+  }
+}

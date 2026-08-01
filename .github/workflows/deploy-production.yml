@@ -1,0 +1,115 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Check shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/*.sh
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck scripts/*.sh
+          fi
+
+  deploy:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://tasks.nkolinka.ru
+    env:
+      YC_CLOUD_ID: ${{ vars.YC_CLOUD_ID }}
+      YC_FOLDER_ID: ${{ vars.YC_FOLDER_ID }}
+      YC_REGISTRY_ID: ${{ vars.YC_REGISTRY_ID }}
+      YC_CONTAINER_ID: ${{ vars.YC_CONTAINER_ID }}
+      YC_RUNTIME_SA_ID: ${{ vars.YC_RUNTIME_SA_ID }}
+      YC_DEPLOY_SA_ID: ${{ vars.YC_DEPLOY_SA_ID }}
+      YC_LOCKBOX_SECRET_ID: ${{ vars.YC_LOCKBOX_SECRET_ID }}
+      YDB_ENDPOINT: ${{ vars.YDB_ENDPOINT }}
+      YDB_DATABASE: ${{ vars.YDB_DATABASE }}
+      OBJECT_STORAGE_BUCKET: ${{ vars.OBJECT_STORAGE_BUCKET }}
+      API_GATEWAY_ID: ${{ vars.API_GATEWAY_ID }}
+      TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Yandex Cloud CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh |
+            bash -s -- -i "$RUNNER_TEMP/yc" -n
+          printf '%s\n' "$RUNNER_TEMP/yc/bin" >>"$GITHUB_PATH"
+
+      - name: Exchange GitHub OIDC token
+        id: auth
+        shell: bash
+        env:
+          YC_FEDERATION_AUDIENCE: ${{ vars.YC_FEDERATION_AUDIENCE }}
+        run: |
+          set -euo pipefail
+          oidc_response=$(curl -fsS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${YC_FEDERATION_AUDIENCE}")
+          oidc_token=$(jq -r '.value' <<<"$oidc_response")
+          iam_response=$(curl -fsS https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=$YC_DEPLOY_SA_ID" \
+            --data-urlencode "subject_token=$oidc_token" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')
+          iam_token=$(jq -r '.access_token' <<<"$iam_response")
+          printf '::add-mask::%s\n' "$oidc_token"
+          printf '::add-mask::%s\n' "$iam_token"
+          printf 'YC_IAM_TOKEN=%s\n' "$iam_token" >>"$GITHUB_ENV"
+          export YC_TOKEN=$iam_token
+          yc config profile create default >/dev/null 2>&1 || yc config profile activate default
+          yc config set cloud-id "$YC_CLOUD_ID"
+          yc config set folder-id "$YC_FOLDER_ID"
+
+      - name: Log in to YCR
+        shell: bash
+        run: printf '%s' "$YC_IAM_TOKEN" | docker login --username iam --password-stdin cr.yandex
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to YCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            cr.yandex/${{ vars.YC_REGISTRY_ID }}/linka-tasks:${{ github.sha }}
+            cr.yandex/${{ vars.YC_REGISTRY_ID }}/linka-tasks:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy serverless container revision
+        shell: bash
+        run: ./scripts/deploy-production-revision.sh "cr.yandex/$YC_REGISTRY_ID/linka-tasks:$GITHUB_SHA"

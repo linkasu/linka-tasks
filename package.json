@@ -1,0 +1,46 @@
+{
+  "name": "linka-tasks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "lint": "eslint .",
+    "postinstall": "nuxt prepare",
+    "preview": "nuxt preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@mdi/font": "^7.4.47",
+    "@yandex-cloud/nodejs-sdk": "^2.9.3",
+    "@vueuse/nuxt": "^14.4.0",
+    "isomorphic-dompurify": "^3.21.0",
+    "marked": "^18.0.7",
+    "nuxt": "^4.5.1",
+    "vue": "^3.5.40",
+    "vue-draggable-plus": "^0.6.1",
+    "vuetify": "^4.1.7",
+    "vuetify-nuxt-module": "^1.0.0-rc.3",
+    "ydb-sdk": "^5.11.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.16.0",
+    "@nuxt/test-utils": "^4.1.0",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.10.0",
+    "eslint": "^10.8.0",
+    "sass": "^1.93.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=24 <27"
+  }
+}

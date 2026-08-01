@@ -1,0 +1,13 @@
+.git
+.github
+.nuxt
+.output
+.data
+coverage
+infra/.env.production.local
+infra/.state
+node_modules
+playwright-report
+test-results
+*.log
+.DS_Store
